@@ -53,8 +53,6 @@ def _resolve_agent_cmd(name: str) -> str | None:
         return _try_paths(["Programs\\Trae\\Trae.exe", "Programs\\Trae CN\\Trae CN.exe"]) or "trae"
     if name_lower == "qoder":
         return _try_paths(["Programs\\Qoder\\Qoder.exe"]) or "qoder"
-    if name_lower == "workbuddy":
-        return _try_paths(["Programs\\WorkBuddy\\WorkBuddy.exe"]) or "workbuddy"
     if name_lower == "cursor":
         return _try_paths(["Programs\\Cursor\\Cursor.exe"]) or "cursor"
     if name_lower == "windsurf":
@@ -292,7 +290,7 @@ class DashboardServer:
 
     def launch_agent(self, cmd: str) -> dict:
         """启动被监控 Agent，自动注入代理环境变量。
-        支持简写名称（trae/qoder/workbuddy/cursor...），自动探测安装路径。"""
+        支持简写名称（trae/qoder/cursor...），自动探测安装路径。"""
         import subprocess, shlex
         if self._agent_process and self._agent_process.poll() is None:
             return {"ok": False, "error": "已有 Agent 在运行，请先终止"}
@@ -309,7 +307,7 @@ class DashboardServer:
 
         # Electron 应用需要 --proxy-server 参数才能走代理
         is_electron = any(x in resolved.lower() for x in
-                          ["trae", "qoder", "workbuddy", "cursor", "codebuddy", "windsurf"])
+                          ["trae", "qoder", "cursor", "codebuddy", "windsurf"])
         if is_electron:
             resolved = f'"{resolved}" --proxy-server=http://127.0.0.1:{self._mitm_port}'
 

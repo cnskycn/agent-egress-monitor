@@ -22,7 +22,7 @@ def _scan_repo(repo_root, max_files: int = 200) -> list[str]:
     repo = pathlib.Path(repo_root)
     hashes = []
     skip_dirs = {".git", "node_modules", "__pycache__", ".venv", "venv",
-                 "dist", "build", ".next", ".workbuddy", ".agentmon"}
+                 "dist", "build", ".next", ".agentmon"}
     skip_ext = {".pyc", ".pyo", ".exe", ".dll", ".so", ".dylib", ".class",
                 ".jar", ".war", ".png", ".jpg", ".jpeg", ".gif", ".ico",
                 ".mp3", ".mp4", ".wav", ".zip", ".tar", ".gz", ".7z"}

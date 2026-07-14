@@ -76,8 +76,8 @@ python cli/main.py dashboard --iface WLAN
 # 3) CLI 实时监控（需管理员）。每条流量都会标注进程名
 python cli/main.py monitor --iface WLAN
 
-# 4) 只看某个进程（如 WorkBuddy / CodeBuddy 的子进程）
-python cli/main.py monitor --iface WLAN --only-proc workbuddy
+# 4) 只看某个指定进程（如 claude / cursor / node 子进程）
+python cli/main.py monitor --iface WLAN --only-proc claude
 
 # 5) 只列出已知 AI/云/代理域名（过滤掉普通网站噪声）
 python cli/main.py monitor --iface WLAN --known-only
@@ -101,7 +101,7 @@ python cli/main.py canary gen --repo .
 `run_monitor.bat` 会自动切到项目目录、调用隔离 venv 的 Python：
 - `run_monitor.bat selftest` → 免提权自检
 - `run_monitor.bat monitor` → 自动请求 UAC 提权后 CLI 持续抓包（可追加参数，如
-  `run_monitor.bat monitor --iface WLAN --only-proc workbuddy`）
+  `run_monitor.bat monitor --iface WLAN --only-proc claude`）
 - `run_monitor.bat dashboard` → 自动请求 UAC 提权后启动 Web 面板，**自动打开浏览器**，
   出现超阈值上传时**浏览器弹桌面通知 + Windows 弹窗**（`--no-browser` 可抑制自动打开）
 - `run_monitor.bat tray` → 系统托盘常驻（任务栏图标，右键菜单：打开面板/状态/退出）
@@ -127,18 +127,17 @@ python cli/main.py canary gen --repo .
 - **实时事件流**：时间/进程/域名/上行体积/标记，每 2s 刷新
 - **桌面通知**：出现超阈值上传时浏览器弹 Windows 通知
 
-## 监控 WorkBuddy 的推荐流程
+## 监控某个代理的推荐流程
 
-目标：把抓到的出向流量**归因到 WorkBuddy 进程**，看清它往哪些域名传了多少数据。
+目标：把抓到的出向流量**归因到目标代理进程**，看清它往哪些域名传了多少数据。
 
 1. **先看全貌（无过滤）**：用管理员身份跑 `monitor`。每条 TLS 握手会打印
    `[时间戳] NEW <进程名> -> <域名> [AGENT] uplink=<体积> dst=<IP:端口>`。
-   观察哪几个进程名对应 WorkBuddy（常见为 `WorkBuddy.exe` / `CodeBuddy.exe` 或
-   其 Electron helper / `node.exe` 子进程）。
-2. **确认进程名后过滤**：例如确认是 `CodeBuddy.exe`，就跑
-   `monitor --only-proc codebuddy`，只留它的流量。
-3. **结合 `[AGENT]` 高亮 + `[WARN] 超阈值`**：WorkBuddy 的后端域名
-   （如 `apihub.agnes-ai.com` / `platform.agnes-ai.com`）会被标 `[AGENT]`；
+   观察哪几个进程名对应目标代理（常见为 `xxx.exe` 或其 `node.exe` / Electron helper 子进程）。
+2. **确认进程名后过滤**：例如确认是 `cursor.exe`，就跑
+   `monitor --only-proc cursor`，只留它的流量。
+3. **结合 `[AGENT]` 高亮 + `[WARN] 超阈值`**：AI 编码代理的后端域名
+   （如 `api.anthropic.com` / `api.x.ai`）会被标 `[AGENT]`；
    若某连接突发数 MB 上行，会触发 `[WARN]`，这正是「整仓上传」式外泄的关键信号。
 4. **注意**：本工具是**纯元数据监控**，只能看到「域名 + 上行体积 + 进程」，**看不到请求体明文**。
    若要内容级检测（蜜罐/指纹），需启用可选 MITM 深度模式（见上面架构调整）。

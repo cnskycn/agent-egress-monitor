@@ -100,19 +100,9 @@ _CLOUD_STORAGE = [
     "upyun.com",               # 又拍云
 ]
 
-# --- WorkBuddy 自身后端（真机抓包实测确认）---
-_WORKBUDDY = [
-    "copilot.tencent.com",
-    "appmiaoda.com",
-    "tgalileo.com",
-    "galileotelemetry",
-    "myqcloud.com",            # 复用 COS
-    "agnes-ai.com",            # Agnes AI
-]
-
 # 合并
 KNOWN_AGENT_DOMAINS = tuple(dict.fromkeys(
-    _AGENTS_INTL + _APIS_INTL + _AGENTS_CN + _APIS_CN + _CLOUD_STORAGE + _WORKBUDDY
+    _AGENTS_INTL + _APIS_INTL + _AGENTS_CN + _APIS_CN + _CLOUD_STORAGE
 ))
 
 # 厂商云域名：上行超过阈值一半时就触发 high 告警
@@ -140,15 +130,13 @@ _DOMAIN_TOOL = {
     "iflycode.com": "iFlyCode", "xfyun.cn": "讯飞",
     "deepseek.com": "DeepSeek", "moonshot.cn": "Kimi",
     "minimax.io": "MiniMax", "01.ai": "零一万物", "baichuan-ai.com": "百川",
-    "copilot.tencent.com": "WorkBuddy", "appmiaoda.com": "WorkBuddy",
-    "tgalileo.com": "WorkBuddy", "galileotelemetry": "WorkBuddy",
     "myqcloud.com": "腾讯COS", "aliyuncs.com": "阿里OSS",
     "volcengineapi.com": "豆包/火山", "bytedance.com": "豆包/火山",
     "openai.com": "ChatGPT", "anthropic.com": "Claude API",
     "x.ai": "Grok", "googleapis.com": "Gemini",
 }
 _AGENT_PROCS = {
-    "WorkBuddy.exe": "WorkBuddy", "Trae.exe": "Trae", "Trae CN.exe": "Trae",
+    "Trae.exe": "Trae", "Trae CN.exe": "Trae",
     "Qoder.exe": "Qoder", "Cursor.exe": "Cursor", "Windsurf.exe": "Windsurf",
     "Code.exe": "VS Code", "claude": "Claude CLI", "grok": "Grok CLI",
     "codebuddy": "CodeBuddy CLI",

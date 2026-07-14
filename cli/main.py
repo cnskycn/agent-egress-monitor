@@ -22,9 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 from core import sni, keylog, canary, capture, decrypt, rules, event as event_mod, procattr, dashboard as dash_mod, logger as logger_mod, tray as tray_mod, mitm as mitm_mod
 
-NODE = "C:/Users/cnskycn/.workbuddy/binaries/node/versions/22.22.2/node.exe"
-if not os.path.exists(NODE):
-    NODE = "node"
+NODE = os.environ.get("NODE_BIN", "node")
 
 
 def build_client_hello(sni_host: str) -> bytes:
@@ -309,8 +307,8 @@ def cmd_monitor(args) -> int:
         now = time.strftime("%H:%M:%S")
         cfg = rules.Config(size_threshold=args.size_threshold)
         samples = [
-            ("WorkBuddy.exe", "apihub.agnes-ai.com", "203.0.113.5:443", 4_200, 4_200, True),
-            ("WorkBuddy.exe", "apihub.agnes-ai.com", "203.0.113.5:443", 980_000, 975_800, False),
+            ("claude.exe", "api.anthropic.com", "203.0.113.5:443", 4_200, 4_200, True),
+            ("cursor.exe", "api2.cursor.com", "203.0.113.5:443", 980_000, 975_800, False),
             ("chrome.exe", "api.anthropic.com", "198.51.100.7:443", 130_000, 130_000, True),
             ("node.exe", "api.x.ai", "192.0.2.9:443", 2_400_000, 2_400_000, True),
             ("Code.exe", "github.com", "140.82.121.4:443", 8_800, 8_800, True),
@@ -329,7 +327,7 @@ def cmd_monitor(args) -> int:
     if not capture._is_admin():
         print("[WARN] 当前不是管理员，抓包可能崩溃或被跳过。请右键以管理员身份运行。")
     print(f"开始监控（Ctrl-C 停止）... 进程归因: {'可用' if pa.available else '不可用'}  网卡: {mon.iface_used}")
-    print("提示：先用无过滤模式看清 WorkBuddy 的进程名与域名，再用 --only-proc 过滤")
+    print("提示：先用无过滤模式看清目标代理的进程名与域名，再用 --only-proc 过滤")
     _run_monitor_loop(mon, pa, args)
     mon.stop()
     return 0
@@ -460,7 +458,7 @@ def main() -> int:
     p.add_argument("--size-threshold", type=int, default=1_000_000,
                    help="单连接上行超此字节数即告警（默认 1MB）")
     p.add_argument("--only-proc", default=None,
-                   help="仅显示进程名含该子串的流量（如 codebuddy / workbuddy）")
+                   help="仅显示进程名含该子串的流量（如 claude / cursor）")
     p.add_argument("--known-only", action="store_true",
                    help="仅显示已知 AI/云/代理域名")
     p.add_argument("--proc-refresh", type=float, default=2.0,
