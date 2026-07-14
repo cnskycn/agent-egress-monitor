@@ -1,0 +1,26 @@
+# ===== Secrets & generated runtime state (NEVER commit) =====
+# CA private key + cert (installed into the local trust store)
+config/mitm_ca_key.pem
+config/mitm_ca.pem
+# Machine-specific runtime config (absolute paths, installed flag, canary token)
+config/agentmon.json
+# Honeytoken canary + fingerprint runtime data
+.agentmon/
+
+# ===== Build artifacts =====
+dist/
+build/
+temp_dist/
+*.spec.bak
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ===== Logs & OS =====
+*.log
+Thumbs.db
+Desktop.ini
