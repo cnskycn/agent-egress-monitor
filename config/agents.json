@@ -1,0 +1,53 @@
+{
+  "agents": [
+    {
+      "name": "claude-code",
+      "binary": "claude",
+      "family": "node",
+      "note": "Anthropic Claude Code，Node.js 实现，尊重 SSLKEYLOGFILE",
+      "typical_endpoints": ["api.anthropic.com"]
+    },
+    {
+      "name": "grok-cli",
+      "binary": "grok",
+      "family": "node",
+      "note": "xAI Grok CLI，Node.js 实现，尊重 SSLKEYLOGFILE",
+      "typical_endpoints": ["api.x.ai"]
+    },
+    {
+      "name": "codex-cli",
+      "binary": "codex",
+      "family": "node",
+      "note": "OpenAI Codex CLI",
+      "typical_endpoints": ["api.openai.com"]
+    },
+    {
+      "name": "cursor",
+      "binary": "cursor",
+      "family": "node",
+      "note": "Cursor 编辑器内代理",
+      "typical_endpoints": ["cursor.com", "api2.cursor.com"]
+    },
+    {
+      "name": "cline",
+      "binary": "cline",
+      "family": "node",
+      "note": "VSCode Cline 扩展",
+      "typical_endpoints": ["api.anthropic.com", "api.openai.com"]
+    },
+    {
+      "name": "aider",
+      "binary": "aider",
+      "family": "python",
+      "note": "Python 实现，默认不写 SSLKEYLOGFILE；仅元数据级可检测",
+      "typical_endpoints": ["api.openai.com", "api.anthropic.com"]
+    },
+    {
+      "name": "continue",
+      "binary": "continue",
+      "family": "node",
+      "note": "Continue 扩展（部分组件 Node）",
+      "typical_endpoints": ["api.openai.com"]
+    }
+  ]
+}

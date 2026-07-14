@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Egress Monitor</title>
+<style>
+:root {
+  --bg: #f5f5f7; --card: #fff; --border: #e0e0e0;
+  --text: #1d1d1f; --muted: #86868b; --accent: #0071e3;
+  --red: #ff3b30; --green: #34c759; --orange: #ff9500; --purple: #af52de;
+  --agent-bg: #fff3cd; --warn-bg: #ffe0e0; --crit-bg: #ffcccc;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+h1 { font-size: 20px; margin-bottom: 4px; }
+.subtitle { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.stats-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; min-width: 120px; }
+.stat-card .label { font-size: 11px; color: var(--muted); }
+.stat-card .value { font-size: 22px; font-weight: 600; margin-top: 2px; }
+.stat-card.agent .value { color: var(--accent); }
+.stat-card.alert .value { color: var(--red); }
+.stat-card.alert.active { background: var(--warn-bg); border-color: var(--red); }
+.alert-badge { display: none; padding: 4px 10px; border-radius: 12px; background: var(--red); color: #fff; font-size: 12px; font-weight: 700; margin-left: 8px; vertical-align: middle; animation: blink 1s infinite; }
+.alert-badge.show { display: inline-block; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.tabs { display: flex; gap: 0; margin-bottom: 0; }
+.tab { padding: 8px 18px; border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; background: #e8e8ed; cursor: pointer; font-size: 13px; margin-right: 2px; }
+.tab.active { background: var(--card); font-weight: 600; }
+.section { background: var(--card); border: 1px solid var(--border); border-radius: 0 8px 8px 8px; overflow: hidden; }
+.section-header { padding: 10px 14px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+.badge { font-size: 10px; padding: 2px 7px; border-radius: 8px; background: var(--border); color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 6px 10px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr.agent-row { background: var(--agent-bg); }
+tr.warn-row { background: var(--warn-bg); }
+tr.crit-row { background: var(--crit-bg); }
+.tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+.tag-agent { background: var(--accent); color: #fff; }
+.tag-warn { background: var(--orange); color: #fff; }
+.tag-crit { background: var(--red); color: #fff; }
+.proc { color: var(--purple); font-family: monospace; font-size: 11px; }
+.sni { font-weight: 500; }
+.bytes { font-family: monospace; text-align: right; white-space: nowrap; }
+.body-preview { font-size: 11px; color: var(--muted); max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { padding: 30px; text-align: center; color: var(--muted); }
+.pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 6px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.bar-wrap { background: #e8e8ed; height: 6px; border-radius: 3px; margin-top: 3px; min-width: 60px; }
+.bar-fill { height: 100%; border-radius: 3px; }
+.bar-agent { background: var(--accent); }
+.bar-other { background: var(--muted); }
+</style>
+</head>
+<body>
+<h1><span class="pulse" id="pulse"></span>Agent Egress Monitor<span class="alert-badge" id="alert-badge">告警</span></h1>
+<div class="subtitle" id="status-line">启动中...</div>
+
+<div class="stats-bar">
+  <div class="stat-card"><div class="label">已发现域名</div><div class="value" id="stat-domains">0</div></div>
+  <div class="stat-card"><div class="label">总上行</div><div class="value" id="stat-uplink">0 B</div></div>
+  <div class="stat-card agent"><div class="label">AI/云 后端</div><div class="value" id="stat-agent">0</div></div>
+  <div class="stat-card alert"><div class="label">告警</div><div class="value" id="stat-alerts">0</div></div>
+  <div class="stat-card"><div class="label">MITM 请求体</div><div class="value" id="stat-bodies">0</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('flow')">实时流量</div>
+  <div class="tab" onclick="switchTab('profile')">域名画像</div>
+  <div class="tab" onclick="switchTab('alerts')">告警汇总</div>
+  <div class="tab" onclick="switchTab('bodies')">内容检测</div>
+</div>
+
+<div class="section" id="tab-flow">
+  <div class="section-header"><span>外联事件流</span><span class="badge" id="event-count">0</span></div>
+  <table><thead><tr><th>时间</th><th>进程</th><th>域名</th><th>目标</th><th>上行</th><th>标记</th></tr></thead>
+  <tbody id="event-body"><tr><td colspan="6" class="empty">等待数据...</td></tr></tbody></table>
+</div>
+
+<div class="section" id="tab-profile" style="display:none">
+  <div class="section-header"><span>各域名累计上行排行</span><span class="badge" id="domain-count">0</span></div>
+  <table><thead><tr><th>域名</th><th>工具</th><th>进程</th><th>累计上行</th><th>连接次数</th><th>平均/次</th><th>标记</th></tr></thead>
+  <tbody id="profile-body"><tr><td colspan="7" class="empty">等待数据...</td></tr></tbody></table>
+</div>
+
+<div class="section" id="tab-alerts" style="display:none">
+  <div class="section-header"><span>告警汇总（同域名+同级别自动合并）</span><span class="badge" id="alert-merged-count">0</span></div>
+  <table><thead><tr><th>域名</th><th>进程</th><th>级别</th><th>累计次数</th><th>总上行</th><th>首次</th><th>最后</th><th>标记</th></tr></thead>
+  <tbody id="alerts-body"><tr><td colspan="8" class="empty">无告警</td></tr></tbody></table>
+</div>
+
+<div class="section" id="tab-bodies" style="display:none">
+  <div class="section-header">
+    <span>MITM 代理 — <span id="mitm-status-light" style="color:var(--muted)">● 未启动</span></span>
+    <span class="badge" id="body-count">0</span>
+  </div>
+  <div style="padding:10px 14px; border-bottom:1px solid var(--border);">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+      <button id="btn-mitm-start" onclick="toggleMitm()" style="padding:5px 16px; border:1px solid var(--accent); border-radius:6px; background:var(--accent); color:#fff; cursor:pointer; font-size:12px;">启动 MITM 代理</button>
+      <span id="mitm-info" style="font-size:11px; color:var(--muted);" colspan="2"></span>
+    </div>
+    <div id="mitm-launcher" style="display:none; margin-top:6px;">
+      <div style="font-size:11px; background:var(--agent-bg); padding:6px 8px; border-radius:4px; margin-bottom:6px; color:var(--text);">
+        <b>操作流程：</b>① 先<b>关闭</b>目标工具（已运行的话）→ ② 点下面按钮<b>重新启动</b>（自动走代理）→ ③ 请求体实时显示在下表中
+      </div>
+      <span style="font-size:11px; color:var(--muted);">选择要监控的工具:</span>
+      <div style="display:flex; gap:4px; margin:4px 0; flex-wrap:wrap;">
+        <button onclick="launchAgentCmd('trae')" style="padding:3px 10px; font-size:11px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--card);">Trae</button>
+        <button onclick="launchAgentCmd('qoder')" style="padding:3px 10px; font-size:11px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--card);">Qoder</button>
+        <button onclick="launchAgentCmd('workbuddy')" style="padding:3px 10px; font-size:11px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--card);">WorkBuddy</button>
+        <button onclick="launchAgentCmd('cursor')" style="padding:3px 10px; font-size:11px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--card);">Cursor</button>
+        <button onclick="launchAgentCmd('claude')" style="padding:3px 10px; font-size:11px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--card);">Claude</button>
+        <button onclick="launchAgentCmd('grok')" style="padding:3px 10px; font-size:11px; font-size:11px; border:1px solid var(--border); border-radius:4px; cursor:pointer; background:var(--card);">Grok</button>
+      </div>
+      <div style="display:flex; gap:4px;">
+        <input id="agent-cmd" placeholder="或输入完整路径/命令" style="flex:1; padding:4px 8px; font-size:12px; border:1px solid var(--border); border-radius:4px;">
+        <button onclick="launchAgent()" style="padding:4px 12px; font-size:12px; border:1px solid var(--accent); border-radius:4px; background:var(--accent); color:#fff; cursor:pointer;">启动</button>
+        <button id="btn-agent-kill" onclick="killAgent()" style="display:none; padding:4px 12px; font-size:12px; border:1px solid var(--red); border-radius:4px; background:var(--red); color:#fff; cursor:pointer;">终止</button>
+      </div>
+      <pre id="agent-console" style="display:none; margin-top:4px; padding:6px; background:#1d1d1f; color:#0f0; font-size:11px; max-height:200px; overflow-y:auto; border-radius:4px; font-family:monospace;"></pre>
+    </div>
+  </div>
+  <table><thead><tr><th>时间</th><th>方法</th><th>主机</th><th>URL</th><th>请求体(前500字符)</th><th>命中</th></tr></thead>
+  <tbody id="body-table"><tr><td colspan="6" class="empty">点击「启动 MITM 代理」开始。<br>启动后选择要监控的程序，代理自动注入。</td></tr></tbody></table>
+</div>
+
+<script>
+let currentTab = "flow";
+let lastEpoch = 0, allEvents = [];
+let _tabs = ["flow","profile","alerts","bodies"];
+
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll(".tab").forEach((t,i) => t.classList.toggle("active", _tabs[i]===name));
+  document.getElementById("tab-flow").style.display = name==="flow"?"":"none";
+  document.getElementById("tab-profile").style.display = name==="profile"?"":"none";
+  document.getElementById("tab-alerts").style.display = name==="alerts"?"":"none";
+  document.getElementById("tab-bodies").style.display = name==="bodies"?"":"none";
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n/1024).toFixed(1) + " KB";
+  if (n < 1073741824) return (n/1048576).toFixed(2) + " MB";
+  return (n/1073741824).toFixed(2) + " GB";
+}
+function esc(s) { const d = document.createElement("div"); d.textContent = s||""; return d.innerHTML; }
+
+async function poll() {
+  try {
+    const [evRes, stRes, bodRes, altRes] = await Promise.all([
+      fetch("/api/events?since=" + lastEpoch),
+      fetch("/api/stats"),
+      fetch("/api/bodies"),
+      fetch("/api/alerts")
+    ]);
+    const events = await evRes.json();
+    const stats = await stRes.json();
+    const bodies = await bodRes.json();
+    const alerts = await altRes.json();
+
+    if (events.length > 0) {
+      allEvents = allEvents.concat(events).slice(-300);
+      lastEpoch = events[events.length - 1].epoch;
+      renderFlow(allEvents);
+    }
+    renderStats(stats);
+    renderProfile(stats.top_domains || []);
+    renderBodies(bodies || []);
+    renderAlerts(alerts || []);
+    document.getElementById("pulse").style.background = "#34c759";
+    // 运行中的 Agent 检测
+    let agentsMsg = "";
+    const running = stats.running_agents || [];
+    if (running.length) {
+      agentsMsg = " | 运行中: " + running.map(a => a[1]).join(", ");
+    }
+    document.getElementById("status-line").textContent =
+      `${stats.total_domains||0} 个域名 | ${fmtBytes(stats.total_uplink||0)} 总上行 | ${stats.alert_count||0} 告警` + agentsMsg;
+  } catch(e) {
+    document.getElementById("pulse").style.background = "#ff3b30";
+  }
+}
+
+function renderStats(s) {
+  document.getElementById("stat-domains").textContent = s.total_domains||0;
+  document.getElementById("stat-uplink").textContent = fmtBytes(s.total_uplink||0);
+  document.getElementById("stat-alerts").textContent = s.alert_count||0;
+  document.getElementById("stat-agent").textContent = (s.top_domains||[]).filter(d=>d.is_agent).length;
+  document.getElementById("stat-bodies").textContent = document.getElementById("body-count").textContent;
+  document.getElementById("domain-count").textContent = (s.total_domains||0) + " 个域名";
+  // 告警高亮
+  document.getElementById("alert-badge").classList.toggle("show", (s.alert_count||0) > 0);
+  document.querySelector(".stat-card.alert").classList.toggle("active", (s.alert_count||0) > 0);
+}
+
+function renderProfile(domains) {
+  const tbody = document.getElementById("profile-body");
+  if (!domains.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">等待数据...</td></tr>'; return; }
+  const maxUp = Math.max(...domains.map(d=>d.uplink), 1);
+  tbody.innerHTML = domains.map(d => `
+    <tr class="${d.is_agent?'agent-row':''}">
+      <td class="sni">${esc(d.sni)}</td>
+      <td><b>${d.tool||''}</b></td>
+      <td class="proc">${esc(d.proc)}</td>
+      <td class="bytes">${fmtBytes(d.uplink)}
+        <div class="bar-wrap"><div class="bar-fill ${d.is_agent?'bar-agent':'bar-other'}" style="width:${(d.uplink/maxUp*100).toFixed(0)}%"></div></div>
+      </td>
+      <td>${d.count}</td>
+      <td>${fmtBytes(d.uplink/d.count||0)}/次</td>
+      <td>${d.is_agent?'<span class="tag tag-agent">AGENT</span>':''}</td>
+    </tr>`).join("");
+  document.getElementById("event-count").textContent = allEvents.length;
+}
+
+function renderFlow(events) {
+  const tbody = document.getElementById("event-body");
+  tbody.innerHTML = events.slice(-80).reverse().map(e => {
+    let cls="", tags="";
+    if (e.is_agent) { cls="agent-row"; tags+='<span class="tag tag-agent">AGENT</span> '; }
+    if (e.alert==="warn") { cls="warn-row"; tags+='<span class="tag tag-warn">WARN</span>'; }
+    if (e.alert==="critical") { cls="crit-row"; tags+='<span class="tag tag-crit">CRIT</span>'; }
+    return `<tr class="${cls}"><td>${e.ts}</td><td class="proc">${esc(e.proc)}</td><td class="sni">${esc(e.sni)}</td><td style="color:var(--muted);font-size:11px">${esc(e.dst)}</td><td class="bytes">${fmtBytes(e.uplink)}</td><td>${tags}</td></tr>`;
+  }).join("");
+}
+
+function renderBodies(bodies) {
+  const tbody = document.getElementById("body-table");
+  document.getElementById("body-count").textContent = bodies.length;
+  if (!bodies.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">未拦截到请求体。启动 MITM 模式后此处将显示通过代理的 HTTP/HTTPS 请求内容。</td></tr>';
+    return;
+  }
+  tbody.innerHTML = bodies.map(b => {
+    let cls="", tags="";
+    if (b.canary_hit) { cls="crit-row"; tags+='<span class="tag tag-crit">蜜罐!</span> '; }
+    if (b.fp_hit) { cls="crit-row"; tags+='<span class="tag tag-crit">指纹!</span> '; }
+    return `<tr class="${cls}"><td>${b.ts}</td><td>${esc(b.method)}</td><td class="sni">${esc(b.host)}</td><td style="font-size:11px;color:var(--muted)">${esc(b.url)}</td><td class="body-preview">${esc(b.body||'(空)')}</td><td>${tags}</td></tr>`;
+  }).join("");
+}
+
+function renderAlerts(alerts) {
+  const tbody = document.getElementById("alerts-body");
+  document.getElementById("alert-merged-count").textContent = alerts.length;
+  if (!alerts.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">无告警</td></tr>'; return; }
+  tbody.innerHTML = alerts.map(a => {
+    let cls = a.alert === "critical" ? "crit-row" : "warn-row";
+    let tag = a.alert === "critical"
+      ? '<span class="tag tag-crit">CRIT</span>'
+      : '<span class="tag tag-warn">WARN</span>';
+    if (a.is_agent) tag += ' <span class="tag tag-agent">AGENT</span>';
+    return `<tr class="${cls}">
+      <td class="sni">${esc(a.sni)}</td>
+      <td class="proc">${esc(a.proc)}</td>
+      <td>${a.alert.toUpperCase()}</td>
+      <td><b>${a.count}</b> 次</td>
+      <td class="bytes">${fmtBytes(a.total_uplink)}</td>
+      <td>${a.first_ts}</td>
+      <td>${a.last_ts}</td>
+      <td>${tag}</td>
+    </tr>`;
+  }).join("");
+}
+
+let mitmRunning = false;
+let mitmPort = 8080;
+let mitmCaPath = "";
+
+async function checkMitmStatus() {
+  try {
+    const r = await fetch("/api/mitm/status");
+    const s = await r.json();
+    mitmRunning = s.running;
+    mitmPort = s.port;
+    mitmCaPath = s.ca_path;
+    updateMitmUI();
+  } catch(e) {}
+}
+
+function updateMitmUI() {
+  const btn = document.getElementById("btn-mitm-start");
+  const light = document.getElementById("mitm-status-light");
+  const info = document.getElementById("mitm-info");
+  const launcher = document.getElementById("mitm-launcher");
+  if (mitmRunning) {
+    btn.textContent = "停止 MITM 代理";
+    btn.style.background = "var(--red)";
+    btn.style.borderColor = "var(--red)";
+    light.innerHTML = '<span style="color:var(--green);font-weight:bold;">● 运行中</span>';
+    info.innerHTML = `端口: ${mitmPort} | CA 已自动安装`;
+    launcher.style.display = "";
+  } else {
+    btn.textContent = "启动 MITM 代理";
+    btn.style.background = "var(--accent)";
+    btn.style.borderColor = "var(--accent)";
+    light.innerHTML = '<span style="color:var(--muted);">● 未启动</span>';
+    info.innerHTML = "启动后将拦截 HTTPS 请求体，检测蜜罐令牌和仓库指纹。";
+    launcher.style.display = "none";
+  }
+}
+
+async function toggleMitm() {
+  const btn = document.getElementById("btn-mitm-start");
+  btn.disabled = true; btn.textContent = "处理中...";
+  try {
+    const r = await fetch(mitmRunning ? "/api/mitm/stop" : "/api/mitm/start", { method: "POST" });
+    const res = await r.json();
+    if (res.ok) {
+      mitmRunning = !mitmRunning;
+      updateMitmUI();
+    } else {
+      alert(res.error || "操作失败");
+    }
+  } catch(e) {
+    alert("请求失败: " + e);
+  }
+  btn.disabled = false;
+  updateMitmUI();
+}
+
+let agentRunning = false;
+
+// 自动探测常见工具路径（后端 _resolve_agent_cmd 处理）
+function launchAgentCmd(name) {
+  document.getElementById("agent-cmd").value = name;
+  launchAgent();
+}
+
+async function launchAgent(cmd) {
+  if (!mitmRunning) { alert("请先启动 MITM 代理"); return; }
+  cmd = cmd || document.getElementById("agent-cmd").value.trim();
+  if (!cmd) { alert("请输入或选择一个程序"); return; }
+  const r = await fetch("/api/mitm/launch", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({cmd: cmd})
+  });
+  const res = await r.json();
+  if (res.ok) {
+    agentRunning = true;
+    document.getElementById("btn-agent-kill").style.display = "";
+    document.getElementById("agent-console").style.display = "";
+    document.getElementById("agent-console").textContent = `[启动] ${cmd} (PID ${res.pid})`;
+  } else {
+    alert(res.error);
+  }
+}
+
+async function killAgent() {
+  const r = await fetch("/api/mitm/kill", {method:"POST"});
+  const res = await r.json();
+  if (res.ok) {
+    agentRunning = false;
+    document.getElementById("btn-agent-kill").style.display = "none";
+    document.getElementById("agent-console").textContent += "\n[终止] Agent 已停止";
+  }
+}
+
+async function pollAgentOutput() {
+  if (!agentRunning) return;
+  try {
+    const r = await fetch("/api/mitm/output");
+    const lines = await r.json();
+    if (lines.length) {
+      const c = document.getElementById("agent-console");
+      c.textContent += "\n" + lines.join("\n");
+      c.scrollTop = c.scrollHeight;
+    }
+  } catch(e) {}
+}
+
+checkMitmStatus();
+poll();
+setInterval(poll, 2000);
+setInterval(checkMitmStatus, 5000);
+setInterval(pollAgentOutput, 1000);
+</script>
+</body>
+</html>
